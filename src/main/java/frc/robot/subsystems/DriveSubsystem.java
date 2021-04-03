@@ -4,6 +4,8 @@
 
 package frc.robot.subsystems;
 
+import com.ctre.phoenix.motorcontrol.FeedbackDevice;
+import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonFX;
 import com.kauailabs.navx.frc.AHRS;
 
@@ -29,113 +31,120 @@ public class DriveSubsystem extends SubsystemBase {
     public static final int frontLeftDriveMotor = 3;
     public static final int frontRightDriveMotor = 4;
   
-    public static final WPI_TalonFX frontLeft = new WPI_TalonFX(frontLeftDriveMotor);
-    public static final WPI_TalonFX backLeft = new WPI_TalonFX(backLeftDriveMotor);
-    public static final WPI_TalonFX frontRight = new WPI_TalonFX(frontRightDriveMotor);
-    public static final WPI_TalonFX backRight = new WPI_TalonFX(backRightDriveMotor);
+    public final static WPI_TalonFX frontLeft = new WPI_TalonFX(frontLeftDriveMotor);
+    public final WPI_TalonFX backLeft = new WPI_TalonFX(backLeftDriveMotor);
+    public final static WPI_TalonFX frontRight = new WPI_TalonFX(frontRightDriveMotor);
+    public final WPI_TalonFX backRight = new WPI_TalonFX(backRightDriveMotor);
 
-
-  // The motors on the left side of the drive.
-  private final SpeedControllerGroup left = new SpeedControllerGroup(frontLeft, backLeft);
+    // The motors on the left side of the drive.
+    private final SpeedControllerGroup left = new SpeedControllerGroup(frontLeft);//, backLeft);
 
     // Define right Speed Controller
-    private final SpeedControllerGroup right = new SpeedControllerGroup(frontRight, backRight);
+    private final SpeedControllerGroup right = new SpeedControllerGroup(frontRight);//, backRight);
 
     private final DifferentialDrive m_drive = new DifferentialDrive(left, right);
 
-  // The left-side drive encoder
-  // private final Encoder m_leftEncoder =
-  //     new Encoder(
-  //         DriveConstants.kLeftEncoderPorts[0],
-  //         DriveConstants.kLeftEncoderPorts[1],
-  //         DriveConstants.kLeftEncoderReversed);
+    // The gyro sensor
+    private final Gyro m_gyro = new AHRS();
 
-  // // The right-side drive encoder
-  // private final Encoder m_rightEncoder =
-  //     new Encoder(
-  //         DriveConstants.kRightEncoderPorts[0],
-  //         DriveConstants.kRightEncoderPorts[1],
-  //         DriveConstants.kRightEncoderReversed);
+    // Odometry class for tracking robot pose
+    private final DifferentialDriveOdometry m_odometry;
 
-  // The gyro sensor
-  private final Gyro m_gyro = new AHRS();
-  
+    /** Creates a new DriveSubsystem. */
+    public DriveSubsystem() {
+      frontLeft.configFactoryDefault();
+      backLeft.configFactoryDefault();
+      frontRight.configFactoryDefault();
+      backRight.configFactoryDefault();
 
-  // Odometry class for tracking robot pose
-  private final DifferentialDriveOdometry m_odometry;
+      backLeft.follow(frontLeft);
+      backRight.follow(frontRight);
 
-  /** Creates a new DriveSubsystem. */
-  public DriveSubsystem() {
-    // Sets the distance per pulse for the encoders
-    // m_leftEncoder.setDistancePerPulse(DriveConstants.kEncoderDistancePerPulse);
-    // m_rightEncoder.setDistancePerPulse(DriveConstants.kEncoderDistancePerPulse);
+      frontLeft.configSelectedFeedbackSensor(FeedbackDevice.IntegratedSensor);
+      frontRight.configSelectedFeedbackSensor(FeedbackDevice.IntegratedSensor);
 
-    resetEncoders();
-    m_odometry = new DifferentialDriveOdometry(m_gyro.getRotation2d());
-  }
+      frontLeft.setNeutralMode(NeutralMode.Brake);
+      frontRight.setNeutralMode(NeutralMode.Brake);
+      backLeft.setNeutralMode(NeutralMode.Brake);
+      backRight.setNeutralMode(NeutralMode.Brake);
 
-  @Override
-  public void periodic() {
-    // Update the odometry in the periodic block
-    
-      m_odometry.update(m_gyro.getRotation2d(), frontLeft.getSelectedSensorPosition() / Constants.ENCODER_EDGES_PER_REV * Constants.gearRatio * Units.inchesToMeters(Constants.wheelCircumferenceInches), frontRight.getSelectedSensorPosition() / Constants.ENCODER_EDGES_PER_REV * Constants.gearRatio * Units.inchesToMeters(Constants.wheelCircumferenceInches));
-  }
+      // Sets the distance per pulse for the encoders
+      // m_leftEncoder.setDistancePerPulse(DriveConstants.kEncoderDistancePerPulse);
+      // m_rightEncoder.setDistancePerPulse(DriveConstants.kEncoderDistancePerPulse);
 
-  /**
-   * Returns the currently-estimated pose of the robot.
-   *
-   * @return The pose.
-   */
-  public Pose2d getPose() {
-    return m_odometry.getPoseMeters();
-  }
+      resetEncoders();
+      m_odometry = new DifferentialDriveOdometry(m_gyro.getRotation2d());
+    }
 
-  /**
-   * Returns the current wheel speeds of the robot.
-   *
-   * @return The current wheel speeds.
-   */
-  public DifferentialDriveWheelSpeeds getWheelSpeeds() {
-    return new DifferentialDriveWheelSpeeds(frontLeft.getSelectedSensorVelocity(0),
-                frontRight.getSelectedSensorVelocity(0));
-  }
+    @Override
+    public void periodic() {
+      // Update the odometry in the periodic block
 
-  /**
-   * Resets the odometry to the specified pose.
-   *
-   * @param pose The pose to which to set the odometry.
-   */
-  public void resetOdometry(Pose2d pose) {
-    resetEncoders();
-    m_odometry.resetPosition(pose, m_gyro.getRotation2d());
-  }
+      m_odometry.update(m_gyro.getRotation2d(),
+          frontLeft.getSelectedSensorPosition() / (Constants.ENCODER_EDGES_PER_REV * Constants.gearRatio
+              * Units.inchesToMeters(Constants.wheelCircumferenceInches)),
+          frontRight.getSelectedSensorPosition() / (Constants.ENCODER_EDGES_PER_REV * Constants.gearRatio
+              * Units.inchesToMeters(Constants.wheelCircumferenceInches)));
+    }
 
-  /**
-   * Drives the robot using arcade controls.
-   *
-   * @param fwd the commanded forward movement
-   * @param rot the commanded rotation
-   */
-  public void arcadeDrive(double fwd, double rot) {
-   // m_drive.arcadeDrive(fwd, rot);
-  }
+    /**
+     * Returns the currently-estimated pose of the robot.
+     *
+     * @return The pose.
+     */
+    public Pose2d getPose() {
+      return m_odometry.getPoseMeters();
+    }
 
-  /**
-   * Controls the left and right sides of the drive directly with voltages.
-   *
-   * @param leftVolts the commanded left output
-   * @param rightVolts the commanded right output
-   */
-  public void tankDriveVolts(double leftVolts, double rightVolts) {
-    left.setVoltage(leftVolts);
-    right.setVoltage(rightVolts);
-    m_drive.feed();
-}
+    /**
+     * Returns the current wheel speeds of the robot.
+     *
+     * @return The current wheel speeds.
+     */
+    public DifferentialDriveWheelSpeeds getWheelSpeeds() {
+      return new DifferentialDriveWheelSpeeds(
+          (frontLeft.getSelectedSensorPosition() * 10) / (Constants.ENCODER_EDGES_PER_REV * Constants.gearRatio
+              * Units.inchesToMeters(Constants.wheelCircumferenceInches)),
+          (frontRight.getSelectedSensorVelocity() * 10) / (Constants.ENCODER_EDGES_PER_REV * Constants.gearRatio
+              * Units.inchesToMeters(Constants.wheelCircumferenceInches)));
+    }
 
-  /** Resets the drive encoders to currently read a position of 0. */
-  public static void resetEncoders() {
-    frontLeft.setSelectedSensorPosition(0);
-    frontRight.setSelectedSensorPosition(0);
+    /**
+     * Resets the odometry to the specified pose.
+     *
+     * @param pose The pose to which to set the odometry.
+     */
+    public void resetOdometry(Pose2d pose) {
+      resetEncoders();
+      m_odometry.resetPosition(pose, m_gyro.getRotation2d());
+    }
+
+    /**
+     * Drives the robot using arcade controls.
+     *
+     * @param fwd the commanded forward movement
+     * @param rot the commanded rotation
+     */
+    public void arcadeDrive(double fwd, double rot) {
+      // m_drive.arcadeDrive(fwd, rot);
+    }
+
+    /**
+     * Controls the left and right sides of the drive directly with voltages.
+     *
+     * @param leftVolts  the commanded left output
+     * @param rightVolts the commanded right output
+     */
+    public void tankDriveVolts(double leftVolts, double rightVolts) {
+      left.setVoltage(leftVolts);
+      right.setVoltage(rightVolts);
+      m_drive.feed();
+    }
+
+    /** Resets the drive encoders to currently read a position of 0. */
+    public static void resetEncoders() {
+      frontLeft.setSelectedSensorPosition(0);
+      frontRight.setSelectedSensorPosition(0);
 }
 
   /**
